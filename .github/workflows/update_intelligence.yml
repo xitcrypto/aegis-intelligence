@@ -4,12 +4,18 @@ on:
     - cron: '0 */12 * * *' # Every 12 hours
   workflow_dispatch: # Allows manual trigger
 
+# THIS PART IS NEW: It explicitly grants the script permission to upload
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Updated to v4 for better stability
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -27,4 +33,4 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
-          publish_branch: gh-pages # This hosts your files at username.github.io/repo/
+          publish_branch: gh-pages
