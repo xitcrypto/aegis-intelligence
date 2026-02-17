@@ -4,7 +4,6 @@ on:
     - cron: '0 */12 * * *' # Every 12 hours
   workflow_dispatch: # Allows manual trigger
 
-# THIS PART IS NEW: It explicitly grants the script permission to upload
 permissions:
   contents: write
   pages: write
@@ -15,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4 # Updated to v4 for better stability
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -27,6 +26,9 @@ jobs:
 
       - name: Run Scraper
         run: python generate_filter.py
+
+      - name: Preserve CNAME for Custom Domain
+        run: echo "intel.aegis-security.app" > CNAME
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
