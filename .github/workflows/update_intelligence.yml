@@ -1,34 +1,40 @@
 name: Update Scam Intelligence
+
 on:
   schedule:
-    - cron: '0 */12 * * *' # Every 12 hours
-  workflow_dispatch: # Allows manual trigger
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
 
 jobs:
-  build:
+  update:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
-        run: pip install requests pybloom_live
+      - name: Install dependencies
+        run: pip install requests==2.31.0
 
-      - name: Run Scraper
+      - name: Generate scam list
         run: python generate_filter.py
 
-      - name: Preserve CNAME for Custom Domain
-        run: echo "intel.aegis-security.app" > CNAME
+      - name: Verify output schema
+        run: |
+          python -c "
+          import json
+          with open('scam_list.json') as f:
+              data = json.load(f)
+          assert 'domains' in data, 'Missing domains key'
+          assert 'version' in data, 'Missing version key'
+          assert 'count' in data, 'Missing count key'
+          assert len(data['domains']) > 0, 'Empty domain list'
+          print(f'Schema OK: {data[\"count\"]} domains, version {data[\"version\"]}')
+          "
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
@@ -36,3 +42,5 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: .
           publish_branch: gh-pages
+          keep_files: false
+          cname: intelligence.aegis.security
