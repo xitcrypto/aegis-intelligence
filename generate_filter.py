@@ -1,44 +1,78 @@
 import requests
 import json
-import os
+from datetime import datetime, timezone
 
-# Sources of Truth
 SOURCES = [
-    "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/master/src/config.json",
-    "https://raw.githubusercontent.com/scamsniffer/scam-database/main/blacklist/domains.json"
+    {
+        "name": "MetaMask eth-phishing-detect",
+        "url": "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/master/src/config.json",
+        "parser": "metamask"
+    },
+    {
+        "name": "ScamSniffer Blacklist",
+        "url": "https://raw.githubusercontent.com/scamsniffer/scam-database/main/blacklist/domains.json",
+        "parser": "flat"
+    }
 ]
 
-def update_intelligence():
-    scam_domains = set()
-    
-    # 1. Fetch MetaMask List
-    try:
-        r = requests.get(SOURCES[0], timeout=10)
-        data = r.json()
-        scam_domains.update(data.get('blacklist', []))
-    except Exception as e:
-        print(f"Error fetching MetaMask list: {e}")
-    
-    # 2. Fetch ScamSniffer List
-    try:
-        r = requests.get(SOURCES[1], timeout=10)
-        data = r.json()
-        scam_domains.update(data)
-    except Exception as e:
-        print(f"Error fetching ScamSniffer list: {e}")
 
-    # Convert to list and sort for consistency
-    final_list = sorted(list(scam_domains))
-    
-    # 3. Save as the JSON file the extension expects
+def normalize_domain(raw):
+    d = raw.strip().lower()
+    for prefix in ["https://", "http://", "www."]:
+        if d.startswith(prefix):
+            d = d[len(prefix):]
+    d = d.split("/")[0]
+    return d
+
+
+def fetch_metamask(url):
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    return data.get("blacklist", [])
+
+
+def fetch_flat(url):
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    return data if isinstance(data, list) else []
+
+
+PARSERS = {
+    "metamask": fetch_metamask,
+    "flat": fetch_flat
+}
+
+
+def main():
+    all_domains = set()
+
+    for source in SOURCES:
+        try:
+            parser = PARSERS[source["parser"]]
+            domains = parser(source["url"])
+            normalized = [normalize_domain(d) for d in domains if d.strip()]
+            all_domains.update(normalized)
+            print(f"  [+] {source['name']}: {len(domains)} raw -> {len(normalized)} normalized")
+        except Exception as e:
+            print(f"  [!] {source['name']} FAILED: {e}")
+
+    all_domains.discard("")
+    sorted_domains = sorted(all_domains)
+
+    output = {
+        "version": datetime.now(timezone.utc).strftime("%Y%m%d%H%M"),
+        "updated": datetime.now(timezone.utc).isoformat(),
+        "count": len(sorted_domains),
+        "domains": sorted_domains
+    }
+
     with open("scam_list.json", "w") as f:
-        json.dump(final_list, f)
+        json.dump(output, f, separators=(',', ':'))
 
-    # 4. Create an index.html so GitHub Pages stays "awake"
-    with open("index.html", "w") as f:
-        f.write(f"<html><body><h1>Aegis Intelligence Online</h1><p>Tracking {len(final_list)} threats.</p></body></html>")
+    print(f"\nDone - {len(sorted_domains)} unique domains written to scam_list.json")
 
-    print(f"Success: Tracked {len(final_list)} scam domains.")
 
-if __name__ == "__main__":
-    update_intelligence()
+if _name_ == "_main_":
+    main()
